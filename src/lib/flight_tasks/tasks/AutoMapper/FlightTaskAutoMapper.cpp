@@ -49,6 +49,7 @@ bool FlightTaskAutoMapper::activate(vehicle_local_position_setpoint_s last_setpo
 
 bool FlightTaskAutoMapper::update()
 {
+	bool ret = FlightTaskAuto::update();
 	// always reset constraints because they might change depending on the type
 	_setDefaultConstraints();
 
@@ -57,7 +58,7 @@ bool FlightTaskAutoMapper::update()
 	// vehicle exits idle.
 
 	if (_type_previous == WaypointType::idle) {
-		_thrust_setpoint.setNaN();
+		_acceleration_setpoint.setNaN();
 	}
 
 	// during mission and reposition, raise the landing gears but only
@@ -107,7 +108,7 @@ bool FlightTaskAutoMapper::update()
 	// update previous type
 	_type_previous = _type;
 
-	return true;
+	return ret;
 }
 
 void FlightTaskAutoMapper::_reset()
@@ -122,19 +123,15 @@ void FlightTaskAutoMapper::_prepareIdleSetpoints()
 	// Send zero thrust setpoint
 	_position_setpoint.setNaN(); // Don't require any position/velocity setpoints
 	_velocity_setpoint.setNaN();
-	_thrust_setpoint.zero();
+	_acceleration_setpoint = Vector3f(0.f, 0.f, 100.f); // High downwards acceleration to make sure there's no thrust
 }
 
 void FlightTaskAutoMapper::_prepareLandSetpoints()
 {
-	float land_speed = _getLandSpeed();
-
 	// Keep xy-position and go down with landspeed
+	float land_speed = _getLandSpeed();
 	_position_setpoint = Vector3f(_target(0), _target(1), NAN);
 	_velocity_setpoint = Vector3f(Vector3f(NAN, NAN, land_speed));
-
-	// set constraints
-	_constraints.tilt = math::radians(_param_mpc_tiltmax_lnd.get());
 	_gear.landing_gear = landing_gear_s::GEAR_DOWN;
 }
 

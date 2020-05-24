@@ -32,14 +32,14 @@ px4_add_board(
 		#imu/adis16448
 		#imu/adis16477
 		#imu/adis16497
-		imu/bmi088
-		imu/mpu6000
-		#imu/mpu9250
+		#imu/bmi088
+		imu/invensense/icm20689
 		#irlock
 		#lights/blinkm
 		#lights/rgbled
 		lights/rgbled_ncp5623c
-		magnetometer # all available magnetometer drivers
+		#magnetometer # all available magnetometer drivers
+		magnetometer/ist8310
 		#mkblctrl
 		#optical_flow # all available optical flow drivers
 		#osd
@@ -49,7 +49,7 @@ px4_add_board(
 #		pwm_input  - Need to create arch/stm32 arch/stm32h7 arch/kinetis and reloacate
 #					   all arch dependant code there
 		pwm_out_sim
-		px4fmu
+		pwm_out
 		px4io
 		#roboclaw
 		#tap_esc
@@ -88,7 +88,6 @@ px4_add_board(
 		vtol_att_control
 	SYSTEMCMDS
 		bl_update
-		config
 		dmesg
 		dumpfile
 		esc_calib
@@ -106,7 +105,6 @@ px4_add_board(
 		reboot
 		reflect
 		sd_bench
-		shutdown
 		tests # tests and test runner
 		top
 		topic_listener
@@ -123,4 +121,5 @@ px4_add_board(
 		#px4_simple_app # Tutorial code from http://dev.px4.io/en/apps/hello_sky.html
 		#rover_steering_control # Rover example app
 		#uuv_example_app
+		#work_item
 	)

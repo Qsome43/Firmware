@@ -105,7 +105,7 @@ protected:
 
 	uint8_t read_reg(uint8_t reg);
 	void read_block(uint8_t reg, uint8_t *val, uint8_t count);
-	void write_reg(uint8_t reg, uint8_t value);
+	int write_reg(uint8_t reg, uint8_t value);
 
 private:
 
@@ -117,7 +117,4 @@ private:
 	perf_counter_t _mag_errors;
 	perf_counter_t _mag_overruns;
 	perf_counter_t _mag_overflows;
-
-	AK09916(const AK09916 &) = delete;
-	AK09916 operator=(const AK09916 &) = delete;
 };

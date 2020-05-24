@@ -2,38 +2,38 @@
 
 [![Releases](https://img.shields.io/github/release/PX4/Firmware.svg)](https://github.com/PX4/Firmware/releases) [![DOI](https://zenodo.org/badge/22634/PX4/Firmware.svg)](https://zenodo.org/badge/latestdoi/22634/PX4/Firmware)
 
-[![Build Status](http://ci.px4.io:8080/buildStatus/icon?job=PX4/Firmware/master)](http://ci.px4.io:8080/blue/organizations/jenkins/PX4%2FFirmware/activity)
+[![Build Status](http://ci.px4.io:8080/buildStatus/icon?job=PX4/Firmware/master)](http://ci.px4.io:8080/blue/organizations/jenkins/PX4%2FFirmware/activity) [![Nuttx Targets](https://github.com/PX4/Firmware/workflows/Nuttx%20Targets/badge.svg)](https://github.com/PX4/Firmware/actions?query=workflow%3A%22Nuttx+Targets%22?branch=master) [![SITL Tests](https://github.com/PX4/Firmware/workflows/SITL%20Tests/badge.svg?branch=master)](https://github.com/PX4/Firmware/actions?query=workflow%3A%22SITL+Tests%22)
 
 [![Slack](https://px4-slack.herokuapp.com/badge.svg)](http://slack.px4.io)
 
 This repository holds the [PX4](http://px4.io) flight control solution for drones, with the main applications located in the [src/modules](https://github.com/PX4/Firmware/tree/master/src/modules) directory. It also contains the PX4 Drone Middleware Platform, which provides drivers and middleware to run drones.
 
 * Official Website: http://px4.io (License: BSD 3-clause, [LICENSE](https://github.com/PX4/Firmware/blob/master/LICENSE))
-* [Supported airframes](https://docs.px4.io/en/airframes/airframe_reference.html) ([portfolio](http://px4.io/#airframes)):
-  * [Multicopters](https://docs.px4.io/en/airframes/airframe_reference.html#copter)
-  * [Fixed wing](https://docs.px4.io/en/airframes/airframe_reference.html#plane)
-  * [VTOL](https://docs.px4.io/en/airframes/airframe_reference.html#vtol)
+* [Supported airframes](https://docs.px4.io/master/en/airframes/airframe_reference.html) ([portfolio](http://px4.io/#airframes)):
+  * [Multicopters](https://docs.px4.io/master/en/airframes/airframe_reference.html#copter)
+  * [Fixed wing](https://docs.px4.io/master/en/airframes/airframe_reference.html#plane)
+  * [VTOL](https://docs.px4.io/master/en/airframes/airframe_reference.html#vtol)
   * many more experimental types (Rovers, Blimps, Boats, Submarines, Autogyros, etc)
 * Releases: [Downloads](https://github.com/PX4/Firmware/releases)
 
 
 ## PX4 Users
 
-The [PX4 User Guide](https://docs.px4.io/en/) explains how to assemble [supported vehicles](https://docs.px4.io/en/airframes/airframe_reference.html) and fly drones with PX4.
-See the [forum and chat](https://docs.px4.io/en/#support) if you need help!
+The [PX4 User Guide](https://docs.px4.io/master/en/) explains how to assemble [supported vehicles](https://docs.px4.io/master/en/airframes/airframe_reference.html) and fly drones with PX4.
+See the [forum and chat](https://docs.px4.io/master/en/#support) if you need help!
 
 
 ## PX4 Developers
 
 This [Developer Guide](https://dev.px4.io/) is for software developers who want to modify the flight stack and middleware (e.g. to add new flight modes), hardware integrators who want to support new flight controller boards and peripherals, and anyone who wants to get PX4 working on a new (unsupported) airframe/vehicle.
 
-Developers should read the [Guide for Contributions](https://dev.px4.io/en/contribute/).
-See the [forum and chat](https://dev.px4.io/en/#support) if you need help!
+Developers should read the [Guide for Contributions](https://dev.px4.io/master/en/contribute/).
+See the [forum and chat](https://dev.px4.io/master/en/#support) if you need help!
 
 
 ### Weekly Dev Call
 
-The PX4 Dev Team syncs up on a [weekly dev call](https://dev.px4.io/en/contribute/#dev_call).
+The PX4 Dev Team syncs up on a [weekly dev call](https://dev.px4.io/master/en/contribute/#dev_call).
 
 > **Note** The dev call is open to all interested developers (not just the core dev team). This is a great opportunity to meet the team and contribute to the ongoing development of the platform. It includes a QA session for newcomers. All regular calls are listed in the [Dronecode calendar](https://www.dronecode.org/calendar/).
 

@@ -38,7 +38,7 @@
 #include <lib/conversion/rotation.h>
 #include <lib/perf/perf_counter.h>
 #include <px4_platform_common/getopt.h>
-#include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
+#include <px4_platform_common/i2c_spi_buses.h>
 
 #define DIR_READ                0x80
 #define DIR_WRITE               0x00
@@ -48,14 +48,28 @@
 
 #define BMI088_BUS_SPEED				10*1000*1000
 
-#define BMI088_TIMER_REDUCTION				200
-
-class BMI088 : public device::SPI
+class BMI088 : public device::SPI, public I2CSPIDriver<BMI088>
 {
+public:
+	BMI088(const char *name, const char *devname, I2CSPIBusOption bus_option, int bus, uint8_t type, uint32_t device,
+	       enum spi_mode_e mode, uint32_t frequency, enum Rotation rotation);
+	virtual ~BMI088() = default;
+
+	static I2CSPIDriverBase *instantiate(const BusCLIArguments &cli, const BusInstanceIterator &iterator,
+					     int runtime_instance);
+	static void print_usage();
+
+	virtual void start() = 0;
+
+	virtual void RunImpl() = 0;
 
 protected:
+	virtual void print_registers() = 0;
+	virtual void test_error() = 0;
 
-	uint8_t         _whoami;    /** whoami result */
+	void custom_method(const BusCLIArguments &cli) override;
+
+	uint8_t         _whoami;    ///< whoami result
 
 	uint8_t         _register_wait;
 	uint64_t        _reset_wait;
@@ -70,7 +84,7 @@ protected:
 	* @param       The register to read.
 	* @return      The value that was read.
 	*/
-	virtual uint8_t         read_reg(unsigned reg); // This needs to be declared as virtual, because the
+	uint8_t         read_reg(unsigned reg) override;
 	virtual uint16_t        read_reg16(unsigned reg);
 
 	/**
@@ -78,19 +92,7 @@ protected:
 	*
 	* @param reg       The register to write.
 	* @param value     The new value to write.
+	* @return	   OK on success, negative errno otherwise.
 	*/
-	void            write_reg(unsigned reg, uint8_t value);
-
-	/* do not allow to copy this class due to pointer data members */
-	BMI088(const BMI088 &);
-	BMI088 operator=(const BMI088 &);
-
-public:
-
-	BMI088(const char *name, const char *devname, int bus, uint32_t device, enum spi_mode_e mode, uint32_t frequency,
-	       enum Rotation rotation);
-
-	virtual ~BMI088() = default;
-
-
+	int            write_reg(unsigned reg, uint8_t value) override;
 };

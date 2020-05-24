@@ -53,7 +53,7 @@ using namespace matrix;
 
 MulticopterAttitudeControl::MulticopterAttitudeControl(bool vtol) :
 	ModuleParams(nullptr),
-	WorkItem(MODULE_NAME, px4::wq_configurations::att_pos_ctrl),
+	WorkItem(MODULE_NAME, px4::wq_configurations::attitude_ctrl),
 	_vehicle_attitude_setpoint_pub(vtol ? ORB_ID(mc_virtual_attitude_setpoint) : ORB_ID(vehicle_attitude_setpoint)),
 	_loop_perf(perf_alloc(PC_ELAPSED, MODULE_NAME": cycle"))
 {
@@ -94,7 +94,8 @@ void
 MulticopterAttitudeControl::parameters_updated()
 {
 	// Store some of the parameters in a more convenient way & precompute often-used values
-	_attitude_control.setProportionalGain(Vector3f(_param_mc_roll_p.get(), _param_mc_pitch_p.get(), _param_mc_yaw_p.get()));
+	_attitude_control.setProportionalGain(Vector3f(_param_mc_roll_p.get(), _param_mc_pitch_p.get(), _param_mc_yaw_p.get()),
+					      _param_mc_yaw_weight.get());
 
 	// angular rate limits
 	using math::radians;
@@ -153,8 +154,12 @@ MulticopterAttitudeControl::generate_attitude_setpoint(float dt, bool reset_yaw_
 	 * This allows a simple limitation of the tilt angle, the vehicle flies towards the direction that the stick
 	 * points to, and changes of the stick input are linear.
 	 */
-	const float x = _manual_control_sp.x * _man_tilt_max;
-	const float y = _manual_control_sp.y * _man_tilt_max;
+	_man_x_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
+	_man_y_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
+	_man_x_input_filter.update(_manual_control_sp.x * _man_tilt_max);
+	_man_y_input_filter.update(_manual_control_sp.y * _man_tilt_max);
+	const float x = _man_x_input_filter.getState();
+	const float y = _man_y_input_filter.getState();
 
 	// we want to fly towards the direction of (x, y), so we use a perpendicular axis angle vector in the XY-plane
 	Vector2f v = Vector2f(y, -x);
@@ -321,6 +326,10 @@ MulticopterAttitudeControl::Run()
 
 				generate_attitude_setpoint(dt, _reset_yaw_sp);
 				attitude_setpoint_generated = true;
+
+			} else {
+				_man_x_input_filter.reset(0.f);
+				_man_y_input_filter.reset(0.f);
 			}
 
 			control_attitude();

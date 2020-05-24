@@ -8,7 +8,7 @@ pipeline {
     stage('Build') {
       agent {
         docker {
-          image 'px4io/px4-dev-ros-melodic:2020-01-13'
+          image 'px4io/px4-dev-ros-melodic:2020-04-01'
           args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw -e HOME=$WORKSPACE'
         }
       }
@@ -57,6 +57,12 @@ pipeline {
             [
               name: "MC_offboard_pos",
               test: "mavros_posix_tests_offboard_posctl.test",
+              mission: "",
+              vehicle: "iris"
+            ],
+            [
+              name: "MC_offboard_rpyrt",
+              test: "mavros_posix_tests_offboard_rpyrt_ctl.test",
               mission: "",
               vehicle: "iris"
             ],
@@ -130,7 +136,7 @@ def createTestNode(Map test_def) {
   return {
     node {
       cleanWs()
-      docker.image("px4io/px4-dev-ros-melodic:2020-01-13").inside('-e HOME=${WORKSPACE}') {
+      docker.image("px4io/px4-dev-ros-melodic:2020-04-01").inside('-e HOME=${WORKSPACE}') {
         stage(test_def.name) {
           def run_script = test_def.get('run_script', 'rostest_px4_run.sh')
           def test_ok = true

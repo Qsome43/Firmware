@@ -39,17 +39,18 @@
 #include <lib/conversion/rotation.h>
 #include <lib/drivers/device/integrator.h>
 #include <lib/ecl/geo/geo.h>
+#include <px4_platform_common/module_params.h>
 #include <uORB/PublicationMulti.hpp>
-#include <uORB/PublicationQueuedMulti.hpp>
+#include <uORB/PublicationMulti.hpp>
 #include <uORB/topics/sensor_accel.h>
 #include <uORB/topics/sensor_accel_fifo.h>
 #include <uORB/topics/sensor_accel_integrated.h>
 #include <uORB/topics/sensor_accel_status.h>
 
-class PX4Accelerometer : public cdev::CDev
+class PX4Accelerometer : public cdev::CDev, public ModuleParams
 {
 public:
-	PX4Accelerometer(uint32_t device_id, uint8_t priority = ORB_PRIO_DEFAULT, enum Rotation rotation = ROTATION_NONE);
+	PX4Accelerometer(uint32_t device_id, ORB_PRIO priority = ORB_PRIO_DEFAULT, enum Rotation rotation = ROTATION_NONE);
 	~PX4Accelerometer() override;
 
 	int	ioctl(cdev::file_t *filp, int cmd, unsigned long arg) override;
@@ -74,9 +75,9 @@ public:
 		uint8_t samples; // number of samples
 		float dt; // in microseconds
 
-		int16_t x[16];
-		int16_t y[16];
-		int16_t z[16];
+		int16_t x[32];
+		int16_t y[32];
+		int16_t z[32];
 	};
 	static_assert(sizeof(FIFOSample::x) == sizeof(sensor_accel_fifo_s::x), "FIFOSample.x invalid size");
 	static_assert(sizeof(FIFOSample::y) == sizeof(sensor_accel_fifo_s::y), "FIFOSample.y invalid size");
@@ -98,7 +99,7 @@ private:
 
 	hrt_abstime	_status_last_publish{0};
 
-	Integrator		_integrator{4000, false};
+	Integrator		_integrator{5000, false}; // 200 Hz default
 
 	matrix::Vector3f	_calibration_scale{1.f, 1.f, 1.f};
 	matrix::Vector3f	_calibration_offset{0.f, 0.f, 0.f};
@@ -110,7 +111,6 @@ private:
 
 	uint32_t		_device_id{0};
 	const enum Rotation	_rotation;
-	const matrix::Dcmf	_rotation_dcm;
 
 	float			_range{16 * CONSTANTS_ONE_G};
 	float			_scale{1.f};
@@ -120,17 +120,20 @@ private:
 
 	uint64_t		_error_count{0};
 
-	uint32_t		_clipping[3] {};
+	uint32_t		_clipping_total[3] {};
 
 	uint16_t		_update_rate{1000};
 
 	// integrator
 	hrt_abstime		_timestamp_sample_prev{0};
 	matrix::Vector3f	_integration_raw{};
+	matrix::Vector3f	_integrator_clipping{};
 	int16_t			_last_sample[3] {};
 	uint8_t			_integrator_reset_samples{4};
 	uint8_t			_integrator_samples{0};
 	uint8_t			_integrator_fifo_samples{0};
-	uint8_t			_integrator_clipping{0};
 
+	DEFINE_PARAMETERS(
+		(ParamInt<px4::params::IMU_INTEG_RATE>) _param_imu_integ_rate
+	)
 };

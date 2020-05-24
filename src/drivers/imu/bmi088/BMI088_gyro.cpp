@@ -34,6 +34,7 @@
 #include "BMI088_gyro.hpp"
 #include "BMI088_accel.hpp"
 
+using namespace time_literals;
 
 /*
  * Global variable of the accelerometer temperature reading, to read it in the bmi055_gyro driver.
@@ -55,26 +56,26 @@ const uint8_t BMI088_gyro::_checked_registers[BMI088_GYRO_NUM_CHECKED_REGISTERS]
 											BMI088_GYR_INT_MAP_1
 										   };
 
-BMI088_gyro::BMI088_gyro(int bus, const char *path_gyro, uint32_t device, enum Rotation rotation) :
-	BMI088("BMI088_GYRO", path_gyro, bus, device, SPIDEV_MODE3, BMI088_BUS_SPEED, rotation),
-	ScheduledWorkItem(MODULE_NAME, px4::device_bus_to_wq(get_device_id())),
-	_px4_gyro(get_device_id(), (external() ? ORB_PRIO_MAX - 1 : ORB_PRIO_HIGH - 1), rotation),
+BMI088_gyro::BMI088_gyro(I2CSPIBusOption bus_option, int bus, const char *path_gyro, uint32_t device,
+			 enum Rotation rotation, int bus_frequency, spi_mode_e spi_mode) :
+	BMI088("bmi088_gyro", path_gyro, bus_option, bus, DRV_GYR_DEVTYPE_BMI088, device, spi_mode, bus_frequency,
+	       rotation),
+	_px4_gyro(get_device_id(), (external() ? ORB_PRIO_VERY_HIGH : ORB_PRIO_DEFAULT), rotation),
 	_sample_perf(perf_alloc(PC_ELAPSED, "bmi088_gyro_read")),
 	_bad_transfers(perf_alloc(PC_COUNT, "bmi088_gyro_bad_transfers")),
-	_bad_registers(perf_alloc(PC_COUNT, "bmi088_gyro_bad_registers"))
+	_bad_registers(perf_alloc(PC_COUNT, "bmi088_gyro_bad_registers")),
+	_duplicates(perf_alloc(PC_COUNT, "bmi088_gyro_duplicates"))
 {
-	_px4_gyro.set_device_type(DRV_GYR_DEVTYPE_BMI088);
+	_px4_gyro.set_update_rate(BMI088_GYRO_DEFAULT_RATE);
 }
 
 BMI088_gyro::~BMI088_gyro()
 {
-	/* make sure we are truly inactive */
-	stop();
-
 	/* delete the perf counter */
 	perf_free(_sample_perf);
 	perf_free(_bad_transfers);
 	perf_free(_bad_registers);
+	perf_free(_duplicates);
 }
 
 int
@@ -106,7 +107,8 @@ int BMI088_gyro::reset()
 
 	//Enable Gyroscope in normal mode
 	write_reg(BMI088_GYR_LPM1, BMI088_GYRO_NORMAL);
-	up_udelay(1000);
+
+	px4_usleep(1000);
 
 	uint8_t retries = 10;
 
@@ -263,33 +265,8 @@ BMI088_gyro::set_gyro_range(unsigned max_dps)
 void
 BMI088_gyro::start()
 {
-	/* make sure we are stopped first */
-	stop();
-
 	/* start polling at the specified rate */
-	ScheduleOnInterval(BMI088_GYRO_DEFAULT_RATE - BMI088_TIMER_REDUCTION, 1000);
-}
-
-void
-BMI088_gyro::stop()
-{
-	ScheduleClear();
-}
-
-void
-BMI088_gyro::Run()
-{
-	/* make another measurement */
-	measure();
-}
-
-void
-BMI088_gyro::measure_trampoline(void *arg)
-{
-	BMI088_gyro *dev = static_cast<BMI088_gyro *>(arg);
-
-	/* make another measurement */
-	dev->measure();
+	ScheduleOnInterval((1_s / BMI088_GYRO_DEFAULT_RATE) / 2, 1000);
 }
 
 void
@@ -336,7 +313,7 @@ BMI088_gyro::check_registers(void)
 }
 
 void
-BMI088_gyro::measure()
+BMI088_gyro::RunImpl()
 {
 	if (hrt_absolute_time() < _reset_wait) {
 		// we're waiting for a reset to complete
@@ -393,6 +370,18 @@ BMI088_gyro::measure()
 		return;
 	}
 
+	// don't publish duplicated reads
+	if ((report.gyro_x == _gyro_prev[0]) && (report.gyro_y == _gyro_prev[1]) && (report.gyro_z == _gyro_prev[2])) {
+		perf_count(_duplicates);
+		perf_end(_sample_perf);
+		return;
+
+	} else {
+		_gyro_prev[0] = report.gyro_x;
+		_gyro_prev[1] = report.gyro_y;
+		_gyro_prev[2] = report.gyro_z;
+	}
+
 	// report the error count as the sum of the number of bad
 	// transfers and bad register reads. This allows the higher
 	// level code to decide if it should use this sensor based on
@@ -424,13 +413,15 @@ BMI088_gyro::measure()
 }
 
 void
-BMI088_gyro::print_info()
+BMI088_gyro::print_status()
 {
+	I2CSPIDriverBase::print_status();
 	PX4_INFO("Gyro");
 
 	perf_print_counter(_sample_perf);
 	perf_print_counter(_bad_transfers);
 	perf_print_counter(_bad_registers);
+	perf_print_counter(_duplicates);
 
 	::printf("checked_next: %u\n", _checked_next);
 

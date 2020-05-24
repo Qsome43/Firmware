@@ -97,11 +97,10 @@ BMI055::custom_method(const BusCLIArguments &cli)
 	}
 }
 
-BMI055::BMI055(const char *name, const char *devname, I2CSPIBusOption bus_option, int bus, int type, uint32_t device,
-	       enum spi_mode_e mode,
-	       uint32_t frequency, enum Rotation rotation):
-	SPI(name, devname, bus, device, mode, frequency),
-	I2CSPIDriver(MODULE_NAME, px4::device_bus_to_wq(get_device_id()), bus_option, bus, type),
+BMI055::BMI055(uint8_t devtype, const char *name, const char *devname, I2CSPIBusOption bus_option, int bus,
+	       uint32_t device, enum spi_mode_e mode, uint32_t frequency, enum Rotation rotation):
+	SPI(devtype, name, bus, device, mode, frequency),
+	I2CSPIDriver(MODULE_NAME, px4::device_bus_to_wq(get_device_id()), bus_option, bus, devtype),
 	_whoami(0),
 	_register_wait(0),
 	_reset_wait(0),
@@ -130,7 +129,7 @@ BMI055::read_reg16(unsigned reg)
 	return (uint16_t)(cmd[1] << 8) | cmd[2];
 }
 
-void
+int
 BMI055::write_reg(unsigned reg, uint8_t value)
 {
 	uint8_t cmd[2];
@@ -138,7 +137,7 @@ BMI055::write_reg(unsigned reg, uint8_t value)
 	cmd[0] = reg | DIR_WRITE;
 	cmd[1] = value;
 
-	transfer(cmd, nullptr, sizeof(cmd));
+	return transfer(cmd, nullptr, sizeof(cmd));
 }
 
 int

@@ -45,7 +45,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include <uORB/PublicationQueued.hpp>
+#include <uORB/Publication.hpp>
 #include <uORB/topics/uORBTopics.hpp>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/vehicle_command_ack.h>
@@ -1207,7 +1207,7 @@ void Logger::start_log_file(LogType type)
 
 	if (type == LogType::Full) {
 		/* print logging path, important to find log file later */
-		mavlink_log_info(&_mavlink_log_pub, "[logger] file:%s", file_name);
+		mavlink_log_info(&_mavlink_log_pub, "[logger] %s", file_name);
 	}
 
 	_writer.start_log_file(type, file_name);
@@ -1769,6 +1769,10 @@ void Logger::write_version(LogType type)
 		snprintf(mcu_ver, sizeof(mcu_ver), "%s, rev. %c", chip_name, revision);
 		write_info(type, "sys_mcu", mcu_ver);
 	}
+
+	// data versioning: increase this on every larger data change (format/semantic)
+	// 1: switch to FIFO drivers (disabled on-chip DLPF)
+	write_info(type, "ver_data_format", 1);
 
 #ifndef BOARD_HAS_NO_UUID
 

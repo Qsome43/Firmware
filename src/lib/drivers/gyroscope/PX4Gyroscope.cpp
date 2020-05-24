@@ -63,7 +63,7 @@ static constexpr unsigned clipping(const int16_t samples[16], int16_t clip_limit
 	return clip_count;
 }
 
-PX4Gyroscope::PX4Gyroscope(uint32_t device_id, uint8_t priority, enum Rotation rotation) :
+PX4Gyroscope::PX4Gyroscope(uint32_t device_id, ORB_PRIO priority, enum Rotation rotation) :
 	CDev(nullptr),
 	ModuleParams(nullptr),
 	_sensor_pub{ORB_ID(sensor_gyro), priority},
@@ -71,12 +71,18 @@ PX4Gyroscope::PX4Gyroscope(uint32_t device_id, uint8_t priority, enum Rotation r
 	_sensor_integrated_pub{ORB_ID(sensor_gyro_integrated), priority},
 	_sensor_status_pub{ORB_ID(sensor_gyro_status), priority},
 	_device_id{device_id},
-	_rotation{rotation},
-	_rotation_dcm{get_rot_matrix(rotation)}
+	_rotation{rotation}
 {
+	// register class and advertise immediately to keep instance numbering in sync
 	_class_device_instance = register_class_devname(GYRO_BASE_DEVICE_PATH);
+	_sensor_pub.advertise();
+	_sensor_integrated_pub.advertise();
+	_sensor_status_pub.advertise();
 
 	updateParams();
+
+	// set reasonable default, driver should be setting real value
+	set_update_rate(800);
 }
 
 PX4Gyroscope::~PX4Gyroscope()
@@ -84,6 +90,11 @@ PX4Gyroscope::~PX4Gyroscope()
 	if (_class_device_instance != -1) {
 		unregister_class_devname(GYRO_BASE_DEVICE_PATH, _class_device_instance);
 	}
+
+	_sensor_pub.unadvertise();
+	_sensor_fifo_pub.unadvertise();
+	_sensor_integrated_pub.unadvertise();
+	_sensor_status_pub.unadvertise();
 }
 
 int PX4Gyroscope::ioctl(cdev::file_t *filp, int cmd, unsigned long arg)
@@ -122,11 +133,21 @@ void PX4Gyroscope::set_device_type(uint8_t devtype)
 
 void PX4Gyroscope::set_update_rate(uint16_t rate)
 {
-	_update_rate = rate;
-	const uint32_t update_interval = 1000000 / rate;
+	_update_rate = math::constrain((int)rate, 50, 32000);
 
-	// TODO: set this intelligently
-	_integrator_reset_samples = 4000 / update_interval;
+	// constrain IMU integration time 1-20 milliseconds (50-1000 Hz)
+	int32_t imu_integration_rate_hz = math::constrain(_param_imu_integ_rate.get(), 50, 1000);
+
+	if (imu_integration_rate_hz != _param_imu_integ_rate.get()) {
+		_param_imu_integ_rate.set(imu_integration_rate_hz);
+		_param_imu_integ_rate.commit_no_notification();
+	}
+
+	const float update_interval_us = 1e6f / _update_rate;
+	const float imu_integration_interval_us = 1e6f / (float)imu_integration_rate_hz;
+
+	_integrator_reset_samples = roundf(imu_integration_interval_us / update_interval_us);
+	_integrator.set_autoreset_interval(_integrator_reset_samples * update_interval_us);
 }
 
 void PX4Gyroscope::update(hrt_abstime timestamp_sample, float x, float y, float z)
@@ -139,8 +160,8 @@ void PX4Gyroscope::update(hrt_abstime timestamp_sample, float x, float y, float 
 	// Clipping (check unscaled raw values)
 	for (int i = 0; i < 3; i++) {
 		if (fabsf(raw(i)) > _clip_limit) {
-			_clipping[i]++;
-			_integrator_clipping++;
+			_clipping_total[i]++;
+			_integrator_clipping(i)++;
 		}
 	}
 
@@ -179,7 +200,11 @@ void PX4Gyroscope::update(hrt_abstime timestamp_sample, float x, float y, float 
 		delta_angle.copyTo(report.delta_angle);
 		report.dt = integral_dt;
 		report.samples = _integrator_samples;
-		report.clip_count = _integrator_clipping;
+
+		for (int i = 0; i < 3; i++) {
+			report.clip_counter[i] = fabsf(roundf(_integrator_clipping(i)));
+		}
+
 		report.timestamp = hrt_absolute_time();
 
 		_sensor_integrated_pub.publish(report);
@@ -232,11 +257,13 @@ void PX4Gyroscope::updateFIFO(const FIFOSample &sample)
 	unsigned clip_count_y = clipping(sample.y, _clip_limit, N);
 	unsigned clip_count_z = clipping(sample.z, _clip_limit, N);
 
-	_clipping[0] += clip_count_x;
-	_clipping[1] += clip_count_y;
-	_clipping[2] += clip_count_z;
+	_clipping_total[0] += clip_count_x;
+	_clipping_total[1] += clip_count_y;
+	_clipping_total[2] += clip_count_z;
 
-	_integrator_clipping += clip_count_x + clip_count_y + clip_count_z;
+	_integrator_clipping(0) += clip_count_x;
+	_integrator_clipping(1) += clip_count_y;
+	_integrator_clipping(2) += clip_count_z;
 
 	// integrated data (INS)
 	{
@@ -262,16 +289,14 @@ void PX4Gyroscope::updateFIFO(const FIFOSample &sample)
 
 		if (_integrator_fifo_samples > 0 && (_integrator_samples >= _integrator_reset_samples)) {
 
-			// Apply rotation and scale
-			// integrated in microseconds, convert to seconds
-			const Vector3f delta_angle_uncalibrated{_rotation_dcm *_integration_raw * _scale};
+			// Apply rotation (before scaling)
+			rotate_3f(_rotation, _integration_raw(0), _integration_raw(1), _integration_raw(2));
 
 			// scale calibration offset to number of samples
 			const Vector3f offset{_calibration_offset * _integrator_fifo_samples};
 
 			// Apply calibration and scale to seconds
-			Vector3f delta_angle{delta_angle_uncalibrated - offset};
-			delta_angle *= 1e-6f * dt;
+			const Vector3f delta_angle{((_integration_raw * _scale) - offset) * 1e-6f * dt};
 
 			// fill sensor_gyro_integrated and publish
 			sensor_gyro_integrated_s report;
@@ -282,7 +307,13 @@ void PX4Gyroscope::updateFIFO(const FIFOSample &sample)
 			delta_angle.copyTo(report.delta_angle);
 			report.dt = _integrator_fifo_samples * dt; // time span in microseconds
 			report.samples = _integrator_fifo_samples;
-			report.clip_count = _integrator_clipping;
+
+			rotate_3f(_rotation, _integrator_clipping(0), _integrator_clipping(1), _integrator_clipping(2));
+			const Vector3f clipping{_integrator_clipping};
+
+			for (int i = 0; i < 3; i++) {
+				report.clip_counter[i] = fabsf(roundf(clipping(i)));
+			}
 
 			report.timestamp = hrt_absolute_time();
 			_sensor_integrated_pub.publish(report);
@@ -331,9 +362,9 @@ void PX4Gyroscope::PublishStatus()
 		status.temperature = _temperature;
 		status.vibration_metric = _vibration_metric;
 		status.coning_vibration = _coning_vibration;
-		status.clipping[0] = _clipping[0];
-		status.clipping[1] = _clipping[1];
-		status.clipping[2] = _clipping[2];
+		status.clipping[0] = _clipping_total[0];
+		status.clipping[1] = _clipping_total[1];
+		status.clipping[2] = _clipping_total[2];
 		status.timestamp = hrt_absolute_time();
 		_sensor_status_pub.publish(status);
 
@@ -346,7 +377,7 @@ void PX4Gyroscope::ResetIntegrator()
 	_integrator_samples = 0;
 	_integrator_fifo_samples = 0;
 	_integration_raw.zero();
-	_integrator_clipping = 0;
+	_integrator_clipping.zero();
 
 	_timestamp_sample_prev = 0;
 }
@@ -372,8 +403,10 @@ void PX4Gyroscope::UpdateVibrationMetrics(const Vector3f &delta_angle)
 
 void PX4Gyroscope::print_status()
 {
+#if !defined(CONSTRAINED_FLASH)
 	PX4_INFO(GYRO_BASE_DEVICE_PATH " device instance: %d", _class_device_instance);
 
 	PX4_INFO("calibration offset: %.5f %.5f %.5f", (double)_calibration_offset(0), (double)_calibration_offset(1),
 		 (double)_calibration_offset(2));
+#endif // !CONSTRAINED_FLASH
 }

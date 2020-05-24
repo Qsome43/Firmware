@@ -38,6 +38,7 @@
 #include "FlightTaskManualAltitude.hpp"
 #include <float.h>
 #include <mathlib/mathlib.h>
+#include <ecl/geo/geo.h>
 
 using namespace matrix;
 
@@ -53,13 +54,11 @@ bool FlightTaskManualAltitude::activate(vehicle_local_position_setpoint_s last_s
 {
 	bool ret = FlightTaskManual::activate(last_setpoint);
 	_yaw_setpoint = NAN;
-	_yawspeed_setpoint = 0.0f;
-	_thrust_setpoint = matrix::Vector3f(0.0f, 0.0f, NAN); // altitude is controlled from position/velocity
+	_yawspeed_setpoint = 0.f;
+	_acceleration_setpoint = Vector3f(0.f, 0.f, NAN); // altitude is controlled from position/velocity
 	_position_setpoint(2) = _position(2);
-	_velocity_setpoint(2) = 0.0f;
+	_velocity_setpoint(2) = 0.f;
 	_setDefaultConstraints();
-
-	_constraints.tilt = math::radians(_param_mpc_man_tilt_max.get());
 
 	_updateConstraintsFromEstimator();
 
@@ -342,13 +341,17 @@ void FlightTaskManualAltitude::_updateSetpoints()
 	// setpoint along z-direction, which is computed in PositionControl.cpp.
 
 	Vector2f sp(&_sticks(0));
+
+	_man_input_filter.setParameters(_deltatime, _param_mc_man_tilt_tau.get());
+	_man_input_filter.update(sp);
+	sp = _man_input_filter.getState();
 	_rotateIntoHeadingFrame(sp);
 
 	if (sp.length() > 1.0f) {
 		sp.normalize();
 	}
 
-	_thrust_setpoint.xy() = sp;
+	_acceleration_setpoint.xy() = sp * tanf(math::radians(_param_mpc_man_tilt_max.get())) * CONSTANTS_ONE_G;
 
 	_updateAltitudeLock();
 	_respectGroundSlowdown();
@@ -362,10 +365,11 @@ bool FlightTaskManualAltitude::_checkTakeoff()
 
 bool FlightTaskManualAltitude::update()
 {
+	bool ret = FlightTaskManual::update();
 	_updateConstraintsFromEstimator();
 	_scaleSticks();
 	_updateSetpoints();
 	_constraints.want_takeoff = _checkTakeoff();
 
-	return true;
+	return ret;
 }

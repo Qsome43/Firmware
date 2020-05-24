@@ -55,21 +55,25 @@ MPU6000::MPU6000(device::Device *interface, enum Rotation rotation, int device_t
 	switch (_device_type) {
 	default:
 	case MPU_DEVICE_TYPE_MPU6000:
+		_interface->set_device_type(DRV_IMU_DEVTYPE_MPU6000);
 		_px4_accel.set_device_type(DRV_IMU_DEVTYPE_MPU6000);
 		_px4_gyro.set_device_type(DRV_IMU_DEVTYPE_MPU6000);
 		break;
 
 	case MPU_DEVICE_TYPE_ICM20602:
+		_interface->set_device_type(DRV_IMU_DEVTYPE_ICM20602);
 		_px4_accel.set_device_type(DRV_IMU_DEVTYPE_ICM20602);
 		_px4_gyro.set_device_type(DRV_IMU_DEVTYPE_ICM20602);
 		break;
 
 	case MPU_DEVICE_TYPE_ICM20608:
-		_px4_accel.set_device_type(DRV_IMU_DEVTYPE_ICM20608);
-		_px4_gyro.set_device_type(DRV_IMU_DEVTYPE_ICM20608);
+		_interface->set_device_type(DRV_IMU_DEVTYPE_ICM20608G);
+		_px4_accel.set_device_type(DRV_IMU_DEVTYPE_ICM20608G);
+		_px4_gyro.set_device_type(DRV_IMU_DEVTYPE_ICM20608G);
 		break;
 
 	case MPU_DEVICE_TYPE_ICM20689:
+		_interface->set_device_type(DRV_IMU_DEVTYPE_ICM20689);
 		_px4_accel.set_device_type(DRV_IMU_DEVTYPE_ICM20689);
 		_px4_gyro.set_device_type(DRV_IMU_DEVTYPE_ICM20689);
 		break;
@@ -156,6 +160,8 @@ int MPU6000::reset()
 
 	// SAMPLE RATE
 	_set_sample_rate(1000);
+	_px4_accel.set_update_rate(1000);
+	_px4_gyro.set_update_rate(1000);
 	px4_usleep(1000);
 
 	_set_dlpf_filter(MPU6000_DEFAULT_ONCHIP_FILTER_FREQ);
